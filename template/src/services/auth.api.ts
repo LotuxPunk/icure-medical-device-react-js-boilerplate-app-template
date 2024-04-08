@@ -1,8 +1,14 @@
-import { AnonymousMedTechApiBuilder, AnonymousMedTechApi, MedTechApiBuilder, User, MedTechApi } from "@icure/medical-device-sdk";
-import { AuthenticationProcess } from "@icure/medical-device-sdk/src/models/AuthenticationProcess";
+import {
+    AnonymousMedTechApi,
+    User,
+    MedTechApi,
+    AuthenticationProcess
+} from "@icure/medical-device-sdk";
+
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { revertAll, setSavedCredentials } from "../app/config";
 import storage from "../app/storage";
+import {SimpleMedTechCryptoStrategies} from "@icure/medical-device-sdk/src/services/MedTechCryptoStrategies";
 
 const apiCache: { [key: string]: MedTechApi | AnonymousMedTechApi } = {};
 
@@ -47,16 +53,23 @@ export const startAuthentication = createAsyncThunk('medTechApi/startAuthenticat
         throw new Error('No email provided');
     }
 
-    const anonymousApi = await new AnonymousMedTechApiBuilder()
-        .withCrypto(crypto)
+    const anonymousApi = await new AnonymousMedTechApi.Builder()
+        .withICureBaseUrl('https://api.icure.cloud')
         .withMsgGwSpecId(process.env.REACT_APP_EXTERNAL_SERVICES_SPEC_ID!)
+        .withCrypto(crypto)
         .withAuthProcessByEmailId(process.env.REACT_APP_EMAIL_AUTHENTICATION_PROCESS_ID!)
-        .withAuthProcessBySmsId(process.env.REACT_APP_SMS_AUTHENTICATION_PROCESS_ID!)
         .withStorage(storage)
-        .preventCookieUsage()
+        .withCryptoStrategies(new SimpleMedTechCryptoStrategies([]))
         .build();
-
-    const authProcess = await anonymousApi.authenticationApi.startAuthentication(_payload.captchaToken, email, undefined, firstName, lastName, process.env.REACT_APP_PARENT_ORGANISATION_ID, undefined, undefined, 'friendly-captcha');
+    const healthcareProfessionalId =  process.env.REACT_APP_PARENT_ORGANISATION_ID
+    const authProcess = await anonymousApi.authenticationApi.startAuthentication(
+        {
+            recaptcha: _payload.captchaToken,
+            email,
+            firstName,
+            lastName,
+            recaptchaType: 'friendly-captcha'
+        });
 
     apiCache[`${authProcess.login}/${authProcess.requestId}`] = anonymousApi;
 
@@ -86,7 +99,7 @@ export const completeAuthentication = createAsyncThunk('medTechApi/completeAuthe
 
     dispatch(setSavedCredentials({ login: `${result.groupId}/${result.userId}`, token: result.token, tokenTimestamp: +Date.now() }));
 
-    return user?.marshal();
+    return User.toJSON(user)
 });
 
 export const login = createAsyncThunk('medTechApi/login', async (_, { getState }) => {
@@ -102,28 +115,27 @@ export const login = createAsyncThunk('medTechApi/login', async (_, { getState }
         throw new Error('No token provided');
     }
 
-    const api = await new MedTechApiBuilder()
-        .withCrypto(crypto)
+    const api = await new MedTechApi.Builder()
+        .withICureBaseUrl('https://api.icure.cloud')
         .withMsgGwSpecId(process.env.REACT_APP_EXTERNAL_SERVICES_SPEC_ID!)
+        .withCrypto(crypto)
         .withAuthProcessByEmailId(process.env.REACT_APP_EMAIL_AUTHENTICATION_PROCESS_ID!)
-        .withAuthProcessBySmsId(process.env.REACT_APP_SMS_AUTHENTICATION_PROCESS_ID!)
         .withStorage(storage)
-        .preventCookieUsage()
         .withUserName(email)
         .withPassword(token)
+        .withCryptoStrategies(new SimpleMedTechCryptoStrategies([]))
         .build();
-    await api.initUserCrypto();
     const user = await api.userApi.getLoggedUser();
 
     apiCache[`${user.groupId}/${user.id}`] = api;
 
-    return user?.marshal();
+    return User.toJSON(user)
 });
 
 export const logout = createAsyncThunk('medTechApi/logout', async (_payload, {dispatch}) => {
     dispatch(revertAll());
     dispatch(resetCredentials());
-  });
+});
 
 export const api = createSlice({
     name: 'medTechApi',
@@ -179,4 +191,3 @@ export const api = createSlice({
 
 
 export const { setRegistrationInformation, setToken, setEmail, setUser, resetCredentials } = api.actions;
-
