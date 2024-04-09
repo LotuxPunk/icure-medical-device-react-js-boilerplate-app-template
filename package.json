@@ -1,14 +1,17 @@
 {
   "name": "@icure/cra-template-icure-medtech",
   "main": "template.json",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "keywords": [
     "icure",
     "medtech",
     "react"
   ],
   "description": "The base template to create your iCure React JS App.",
-  "files": ["template", "template.json"],
+  "files": [
+    "template",
+    "template.json"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/icure/icure-medical-device-react-js-boilerplate-app-template"
